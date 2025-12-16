@@ -16,7 +16,7 @@
 ### 1. 克隆或下载此脚本
 
 ```bash
-git clone <repository-url>
+git clone git@github.com:TerrisZhao/auto-file-organizer.git
 cd auto-file-organizer
 ```
 
