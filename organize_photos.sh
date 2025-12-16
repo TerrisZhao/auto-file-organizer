@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# 照片自动分类脚本
-# 根据照片的拍摄日期，将照片移动到对应日期的文件夹中
+# 照片/视频自动分类脚本
+# 根据照片/视频的拍摄日期，将文件移动到对应日期的文件夹中
 
 # 配置部分
 SOURCE_DIR="${1:-.}"  # 默认为当前目录，可通过第一个参数指定
@@ -9,7 +9,10 @@ DATE_FORMAT="%Y-%m-%d"  # 文件夹日期格式：2024-01-15
 DRY_RUN=false  # 是否为测试模式（只显示不实际移动）
 
 # 支持的图片格式（不区分大小写）
-IMAGE_EXTENSIONS="jpg jpeg png gif bmp tiff tif heic heif raw cr2 nef arw dng"
+IMAGE_EXTENSIONS="jpg jpeg png gif bmp tiff tif heic heif hif raw cr2 nef arw dng"
+
+# 支持的视频格式（不区分大小写）
+VIDEO_EXTENSIONS="mp4 mov avi mkv m4v 3gp flv wmv mpg mpeg m2ts mts"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -79,17 +82,26 @@ get_photo_date() {
     echo "$date_taken"
 }
 
-# 检查文件是否为图片
-is_image_file() {
+# 检查文件是否为图片或视频
+is_media_file() {
     local file="$1"
     local ext="${file##*.}"
     ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
 
+    # 检查是否为图片格式
     for valid_ext in $IMAGE_EXTENSIONS; do
         if [ "$ext" = "$valid_ext" ]; then
             return 0
         fi
     done
+
+    # 检查是否为视频格式
+    for valid_ext in $VIDEO_EXTENSIONS; do
+        if [ "$ext" = "$valid_ext" ]; then
+            return 0
+        fi
+    done
+
     return 1
 }
 
@@ -113,8 +125,8 @@ process_photos() {
         # 获取文件名
         filename=$(basename "$file")
 
-        # 检查是否为图片文件
-        if ! is_image_file "$filename"; then
+        # 检查是否为图片或视频文件
+        if ! is_media_file "$filename"; then
             continue
         fi
 
@@ -188,13 +200,13 @@ process_photos() {
 # 显示帮助信息
 show_help() {
     cat << EOF
-照片自动分类脚本
+照片/视频自动分类脚本
 
 用法:
     $0 [选项] [目录]
 
 参数:
-    目录          要处理的照片目录（默认为当前目录）
+    目录          要处理的照片/视频目录（默认为当前目录）
 
 选项:
     -h, --help    显示此帮助信息
@@ -206,8 +218,9 @@ show_help() {
     $0 --dry-run            # 测试模式
 
 说明:
-    - 脚本会根据照片的 EXIF 拍摄日期创建文件夹（格式：YYYY-MM-DD）
-    - 支持的图片格式: jpg, jpeg, png, gif, bmp, tiff, heic, raw 等
+    - 脚本会根据照片/视频的拍摄日期创建文件夹（格式：YYYY-MM-DD）
+    - 支持的图片格式: jpg, jpeg, png, gif, bmp, tiff, heic, heif, hif, raw 等
+    - 支持的视频格式: mp4, mov, avi, mkv, m4v, 3gp, flv, wmv, mpg, mpeg, m2ts, mts 等
     - 如果安装了 exiftool，将获得更准确的拍摄日期
     - 否则使用 macOS mdls 命令或文件修改时间
 
