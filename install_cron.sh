@@ -33,14 +33,29 @@ case $choice in
     1)
         # launchd 方式
         echo ""
-        read -p "请输入照片目录的完整路径: " PHOTOS_DIR
+        read -p "请输入源目录的完整路径（照片所在位置）: " SOURCE_DIR
 
-        if [ ! -d "$PHOTOS_DIR" ]; then
-            echo -e "${YELLOW}警告: 目录不存在，但会继续安装${NC}"
+        if [ ! -d "$SOURCE_DIR" ]; then
+            echo -e "${YELLOW}警告: 源目录不存在，但会继续安装${NC}"
+        fi
+
+        read -p "请输入目标目录的完整路径（留空则使用源目录）: " DEST_DIR
+
+        if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
+            echo -e "${YELLOW}警告: 目标目录不存在，但会继续安装${NC}"
         fi
 
         # 创建 plist 文件
         PLIST_FILE="$HOME/Library/LaunchAgents/com.user.organize-photos.plist"
+
+        # 构建程序参数数组
+        PROGRAM_ARGS="        <string>$ORGANIZE_SCRIPT</string>
+        <string>$SOURCE_DIR</string>"
+
+        if [ -n "$DEST_DIR" ]; then
+            PROGRAM_ARGS="$PROGRAM_ARGS
+        <string>$DEST_DIR</string>"
+        fi
 
         cat > "$PLIST_FILE" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -51,8 +66,7 @@ case $choice in
     <string>com.user.organize-photos</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$ORGANIZE_SCRIPT</string>
-        <string>$PHOTOS_DIR</string>
+$PROGRAM_ARGS
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -100,14 +114,24 @@ EOF
     2)
         # cron 方式
         echo ""
-        read -p "请输入照片目录的完整路径: " PHOTOS_DIR
+        read -p "请输入源目录的完整路径（照片所在位置）: " SOURCE_DIR
 
-        if [ ! -d "$PHOTOS_DIR" ]; then
-            echo -e "${YELLOW}警告: 目录不存在，但会继续安装${NC}"
+        if [ ! -d "$SOURCE_DIR" ]; then
+            echo -e "${YELLOW}警告: 源目录不存在，但会继续安装${NC}"
+        fi
+
+        read -p "请输入目标目录的完整路径（留空则使用源目录）: " DEST_DIR
+
+        if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
+            echo -e "${YELLOW}警告: 目标目录不存在，但会继续安装${NC}"
         fi
 
         # 创建 cron 任务
-        CRON_CMD="0 2 * * * $ORGANIZE_SCRIPT \"$PHOTOS_DIR\" >> /tmp/organize_photos.log 2>&1"
+        if [ -n "$DEST_DIR" ]; then
+            CRON_CMD="0 2 * * * $ORGANIZE_SCRIPT \"$SOURCE_DIR\" \"$DEST_DIR\" >> /tmp/organize_photos.log 2>&1"
+        else
+            CRON_CMD="0 2 * * * $ORGANIZE_SCRIPT \"$SOURCE_DIR\" >> /tmp/organize_photos.log 2>&1"
+        fi
 
         # 检查是否已存在
         if crontab -l 2>/dev/null | grep -q "$ORGANIZE_SCRIPT"; then
@@ -156,5 +180,9 @@ echo "================================"
 echo -e "${GREEN}安装完成！${NC}"
 echo ""
 echo "提示："
-echo "  - 可以先用 '$ORGANIZE_SCRIPT --dry-run $PHOTOS_DIR' 测试"
+if [ -n "$DEST_DIR" ]; then
+    echo "  - 可以先用 '$ORGANIZE_SCRIPT --dry-run \"$SOURCE_DIR\" \"$DEST_DIR\"' 测试"
+else
+    echo "  - 可以先用 '$ORGANIZE_SCRIPT --dry-run \"$SOURCE_DIR\"' 测试"
+fi
 echo "  - 建议安装 exiftool 以获得更准确的日期: brew install exiftool"

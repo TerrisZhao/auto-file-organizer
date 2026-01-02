@@ -4,7 +4,8 @@
 # 根据照片/视频的拍摄日期，将文件移动到对应日期的文件夹中
 
 # 配置部分
-SOURCE_DIR="${1:-.}"  # 默认为当前目录，可通过第一个参数指定
+SOURCE_DIR=""  # 源目录（读取文件的位置）
+DEST_DIR=""    # 目标目录（存放分类后文件的位置，默认与源目录相同）
 DATE_FORMAT="%Y-%m-%d"  # 文件夹日期格式：2024-01-15
 DRY_RUN=false  # 是否为测试模式（只显示不实际移动）
 
@@ -108,11 +109,13 @@ is_media_file() {
 # 主处理函数
 process_photos() {
     local source_dir="$1"
+    local dest_dir="$2"
     local processed=0
     local skipped=0
     local errors=0
 
-    log_info "开始处理目录: $source_dir"
+    log_info "源目录: $source_dir"
+    log_info "目标目录: $dest_dir"
     log_info "================================"
 
     # 使用 find 命令遍历所有文件（不递归到已创建的日期文件夹）
@@ -139,17 +142,17 @@ process_photos() {
             continue
         fi
 
-        # 检查文件是否已经在正确的文件夹中
-        current_dir=$(dirname "$file")
-        current_dir_name=$(basename "$current_dir")
-        if [ "$current_dir_name" = "$date_folder" ]; then
+        # 创建目标文件夹
+        target_dir="$dest_dir/$date_folder"
+
+        # 检查文件是否已经在正确的位置
+        current_file_path=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
+        expected_file_path="$target_dir/$filename"
+        if [ "$current_file_path" = "$expected_file_path" ]; then
             log_info "已在正确位置: $filename -> $date_folder/"
             ((skipped++))
             continue
         fi
-
-        # 创建目标文件夹
-        target_dir="$source_dir/$date_folder"
         if [ ! -d "$target_dir" ]; then
             if [ "$DRY_RUN" = false ]; then
                 mkdir -p "$target_dir"
@@ -203,22 +206,25 @@ show_help() {
 照片/视频自动分类脚本
 
 用法:
-    $0 [选项] [目录]
+    $0 [选项] <源目录> [目标目录]
 
 参数:
-    目录          要处理的照片/视频目录（默认为当前目录）
+    源目录        要处理的照片/视频所在目录（必需）
+    目标目录      分类后文件的存放目录（可选，默认与源目录相同）
 
 选项:
     -h, --help    显示此帮助信息
     -d, --dry-run 测试模式，只显示将要执行的操作，不实际移动文件
 
 示例:
-    $0                      # 处理当前目录
-    $0 ~/Pictures/Photos    # 处理指定目录
-    $0 --dry-run            # 测试模式
+    $0 ~/Downloads                           # 在下载目录中整理，文件移动到下载目录下的日期文件夹
+    $0 ~/Downloads /abc/photo                # 从下载目录读取，移动到 /abc/photo/2025-11-13/ 等日期文件夹
+    $0 --dry-run ~/Downloads /abc/photo      # 测试模式，查看将要执行的操作
 
 说明:
     - 脚本会根据照片/视频的拍摄日期创建文件夹（格式：YYYY-MM-DD）
+    - 文件从源目录读取，移动到目标目录下对应的日期文件夹中
+    - 如果不指定目标目录，文件将在源目录中按日期分类
     - 支持的图片格式: jpg, jpeg, png, gif, bmp, tiff, heic, heif, hif, raw 等
     - 支持的视频格式: mp4, mov, avi, mkv, m4v, 3gp, flv, wmv, mpg, mpeg, m2ts, mts 等
     - 如果安装了 exiftool，将获得更准确的拍摄日期
@@ -242,22 +248,55 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         *)
-            SOURCE_DIR="$1"
+            if [ -z "$SOURCE_DIR" ]; then
+                SOURCE_DIR="$1"
+            elif [ -z "$DEST_DIR" ]; then
+                DEST_DIR="$1"
+            else
+                log_error "参数过多: $1"
+                show_help
+                exit 1
+            fi
             shift
             ;;
     esac
 done
 
+# 检查源目录是否指定
+if [ -z "$SOURCE_DIR" ]; then
+    log_error "请指定源目录"
+    show_help
+    exit 1
+fi
+
 # 检查源目录是否存在
 if [ ! -d "$SOURCE_DIR" ]; then
-    log_error "目录不存在: $SOURCE_DIR"
+    log_error "源目录不存在: $SOURCE_DIR"
     exit 1
 fi
 
 # 转换为绝对路径
 SOURCE_DIR=$(cd "$SOURCE_DIR" && pwd)
 
+# 如果未指定目标目录，使用源目录
+if [ -z "$DEST_DIR" ]; then
+    DEST_DIR="$SOURCE_DIR"
+    log_info "未指定目标目录，将在源目录中整理文件"
+else
+    # 如果目标目录不存在，创建它
+    if [ ! -d "$DEST_DIR" ]; then
+        log_info "目标目录不存在，正在创建: $DEST_DIR"
+        mkdir -p "$DEST_DIR"
+        if [ $? -ne 0 ]; then
+            log_error "无法创建目标目录: $DEST_DIR"
+            exit 1
+        fi
+    fi
+    # 转换为绝对路径
+    DEST_DIR=$(cd "$DEST_DIR" && pwd)
+fi
+
 # 开始处理
-process_photos "$SOURCE_DIR"
+process_photos "$SOURCE_DIR" "$DEST_DIR"
 
 exit 0
